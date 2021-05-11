@@ -37,7 +37,10 @@ class PINN_object():
 
         # training data
         self.losses = []
-        self.epoch  = 0 
+        self.epoch  = 0
+
+        # Generate the sample points
+        self.domain.update_samples()
 
 
 
@@ -57,8 +60,6 @@ class PINN_object():
     def __epoch_loss(self):
         """Compute the loss in one epoch for the generated sample points."""
 
-        # Generate the sample points for this epoch
-        self.domain.update_samples()
         sample_points = tf.convert_to_tensor(self.domain.samples)
 
         # Using GradientTape for computing the derivatives of the output of the model
@@ -70,22 +71,23 @@ class PINN_object():
             # Get the output of the model + BC adaptation for the generated sample points
             u_values = self.evaluate(sample_points, training = True)
 
-            # Calculate the gradient of the u valies
+            # Calculate the gradient of the u values
             grad_u_values = tape.gradient(u_values, sample_points)
-            u_values_x    = grad_u_values[:,0]
-            u_values_y    = grad_u_values[:,1]
+            
+            u_values_x = grad_u_values[:,0]
+            u_values_y = grad_u_values[:,1]
 
-            # Calculate the second order derivatives
-            u_values_xx = tape.gradient(u_values_x, sample_points)[:,0]
-            u_values_yy = tape.gradient(u_values_y, sample_points)[:,1]
+        # Calculate the second order derivatives
+        u_values_xx = tape.gradient(u_values_x, sample_points)[:,0]
+        u_values_yy = tape.gradient(u_values_y, sample_points)[:,1]
 
-            # Calculate the value of the LHS of the PDE
-            diffusion = -self.kappa*(u_values_xx + u_values_yy)
-            advection = self.beta[0] * u_values_x + self.beta[1] * u_values_y
-            f_values  = self.RHS_f(sample_points[:,0],sample_points[:,1])
+        # Calculate the value of the LHS and RHS of the PDE
+        diffusion = -self.kappa*(u_values_xx + u_values_yy)
+        advection = self.beta[0] * u_values_x + self.beta[1] * u_values_y
+        f_values  = self.RHS_f(sample_points[:,0],sample_points[:,1])
 
-            # Calculate loss from the PDE
-            loss = tf.reduce_mean(tf.square(diffusion + advection - f_values))
+        # Calculate loss from the PDE
+        loss = tf.reduce_mean(tf.square(diffusion + advection - f_values))
 
         # Letting the tape go
         del tape
