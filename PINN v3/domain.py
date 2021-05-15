@@ -98,7 +98,7 @@ class rectangular_domain():
 
 
     def enforce_BC(self,u,x,y):
-        """Enforce the Dirichlet boundary conditions on the input"""
+        """Enforce the homogeneous Dirichlet boundary conditions on the input"""
 
         hom_dirichlet_1D_x   = (1-np.exp(-self.alpha*x/self.L))*(1-np.exp(-self.alpha*(self.L-x)/self.L))
         hom_dirichlet_1D_y   = (1-np.exp(-self.alpha*y/self.H))*(1-np.exp(-self.alpha*(self.H-y)/self.H))

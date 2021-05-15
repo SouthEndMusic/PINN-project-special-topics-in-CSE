@@ -193,7 +193,7 @@ class PINN_object_stokesflow():
         # Domain (see domain.py)
         self.domain = domain
 
-        # Neural network model in keras
+        # Neural network model in keras (see network.py)
         self.model = model
 
         # Optimizer
@@ -223,8 +223,7 @@ class PINN_object_stokesflow():
 
 
     def evaluate(self,inputs, training = False):
-        """Evaluate the neural network in combination with the modifications for the boundary
-        conditions."""
+        """Evaluate the neural network."""
 
         u_NN = self.model(inputs, training = training)
         p    = u_NN[:,0]
@@ -238,6 +237,7 @@ class PINN_object_stokesflow():
     def __epoch_loss(self):
         """Compute the loss in one epoch for the generated sample points."""
 
+        # The sample points on the boundary also contribute to the interior losss
         sample_points = tf.convert_to_tensor(np.concatenate([self.domain.interior_samples,
                                                              self.domain.boundary_samples]))
 
@@ -289,7 +289,9 @@ class PINN_object_stokesflow():
                                                        training = True)
 
         loss_boundary = 0
-        
+
+        # These loops go over the boundary samples per boundary (left, right, top, bottom) and compute the difference to the
+        # values of the functions that define the boundary conditions.
         for boundary_samples, boundary_values, BC_function, dim in zip(np.split(self.domain.boundary_samples,
                                                                                 self.domain.boundary_sample_starts, axis = 0),
                                                                        tf.split(v1_values,
@@ -313,7 +315,7 @@ class PINN_object_stokesflow():
 
         loss_boundary /= 2*self.domain.boundary_samples.shape[0]
 
-        # Sum of losses
+        # Weighted sum of losses
         loss = self.loss_weights[0]*loss_incompr + self.loss_weights[1]*loss_PDE + self.loss_weights[2]*loss_boundary
 
         # Record losses
@@ -345,7 +347,7 @@ class PINN_object_stokesflow():
         ax_loss, ax_p, ax_v1, ax_v2 = axs.flat
         loss_lines                  = []
 
-        for loss_type in ['total loss','incompressibility loss','interior (PDE) loss','boundary loss']:
+        for loss_type in ['total loss (weighted)','incompressibility loss','interior (PDE) loss','boundary loss']:
             loss_lines.append(ax_loss.plot([],[], label = loss_type)[0])
         
         ax_loss.set_yscale('log')
