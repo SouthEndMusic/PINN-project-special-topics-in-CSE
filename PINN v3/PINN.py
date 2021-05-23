@@ -87,7 +87,7 @@ class PINN_object_warmup():
 
 
 
-    def __epoch_grads(self):
+    def __epoch_grad(self):
         """Compute the gradient in one epoch of the u values w.r.t. the sample points."""
         with tf.GradientTape() as tape:
             loss = self.__epoch_loss()
@@ -145,7 +145,7 @@ class PINN_object_warmup():
 
             self.epoch += 1
 
-            grads, loss = self.__epoch_grads()
+            grads, loss = self.__epoch_grad()
             self.optimizer.apply_gradients(zip(grads,self.model.trainable_variables))
 
             self.losses.append(loss.numpy())
@@ -220,17 +220,51 @@ class PINN_object_stokesflow():
         self.loss_weights = loss_weights
         
 
-
-
     def evaluate(self,inputs, training = False):
         """Evaluate the neural network."""
 
         u_NN = self.model(inputs, training = training)
-        p    = u_NN[:,0]
-        v1   = u_NN[:,1]
-        v2   = u_NN[:,2]
+
+        if type(u_NN) == list:
+            p,v1,v2 = u_NN
+
+        else:
+            p    = u_NN[:,0]
+            v1   = u_NN[:,1]
+            v2   = u_NN[:,2]
 
         return p,v1,v2
+
+
+
+    def compute_f_and_BC_values(self):
+        """Values of the function f in the RHS of the PDE"""
+        
+        sample_points = np.concatenate([self.domain.interior_samples,
+                                        self.domain.boundary_samples])
+        self.RHS_f_values  = self.RHS_f(sample_points[:,0],sample_points[:,1])
+
+        BC_values_v1 = []
+        BC_values_v2 = []
+
+        for boundary_samples, BC_function, dim in zip(np.split(self.domain.boundary_samples,
+                                                               self.domain.boundary_sample_starts, axis = 0),
+                                                      self.BCs_v1,
+                                                      [1,1,0,0]):
+
+            BC_values_v1.append(BC_function(boundary_samples[:,dim])[:,np.newaxis])
+
+        for boundary_samples, BC_function, dim in zip(np.split(self.domain.boundary_samples,
+                                                               self.domain.boundary_sample_starts, axis = 0),
+                                                       self.BCs_v2,
+                                                       [1,1,0,0]):
+
+            BC_values_v2.append(BC_function(boundary_samples[:,dim])[:,np.newaxis])
+
+        self.BC_values_v1 = BC_values_v1
+        self.BC_values_v2 = BC_values_v2
+
+        
 
 
 
@@ -238,8 +272,8 @@ class PINN_object_stokesflow():
         """Compute the loss in one epoch for the generated sample points."""
 
         # The sample points on the boundary also contribute to the interior losss
-        sample_points = tf.convert_to_tensor(np.concatenate([self.domain.interior_samples,
-                                                             self.domain.boundary_samples]))
+        sample_points = tf.convert_to_tensor(np.concatenate([self.domain.boundary_samples,
+                                                             self.domain.interior_samples]))
 
         # Using GradientTape for computing the derivatives of the output of the model
         # with respect to the inputs
@@ -249,8 +283,6 @@ class PINN_object_stokesflow():
 
             # Get the output of the model + BC adaptation for the interior sample points
             p_values, v1_values, v2_values = self.evaluate(sample_points, training = True)
-
-            
 
             # Get the first order derivatives of the velocity components
             grad_v1_values = tape.gradient(v1_values, sample_points)
@@ -278,39 +310,25 @@ class PINN_object_stokesflow():
 
         # Calculate the value of the LHS and RHS of the PDE
         diffusion = nablasq_v
-        f_values  = self.RHS_f(sample_points[:,0],sample_points[:,1])
 
         # Calculate loss from the PDE
-        loss_vectors = -p_gradient + diffusion - f_values
+        loss_vectors = -p_gradient + diffusion - self.RHS_f_values
         loss_PDE     = tf.reduce_mean(tf.square(loss_vectors[:,0])) + tf.reduce_mean(tf.square(loss_vectors[:,1]))
-
-        # Calculate loss from the boundaries
-        p_values, v1_values, v2_values = self.evaluate(self.domain.boundary_samples,
-                                                       training = True)
 
         loss_boundary = 0
 
         # These loops go over the boundary samples per boundary (left, right, top, bottom) and compute the difference to the
         # values of the functions that define the boundary conditions.
-        for boundary_samples, boundary_values, BC_function, dim in zip(np.split(self.domain.boundary_samples,
-                                                                                self.domain.boundary_sample_starts, axis = 0),
-                                                                       tf.split(v1_values,
-                                                                                self.domain.samples_per_boundary, axis = 0),
-                                                                       self.BCs_v1,
-                                                                       [0,0,1,1]):
+        for boundary_values, BC_values in zip(tf.split(v1_values[:self.domain.boundary_samples.shape[0]],
+                                                       self.domain.samples_per_boundary, axis = 0),
+                                              self.BC_values_v1):
 
-
-            BC_values      = BC_function(boundary_samples[:,dim])
             loss_boundary += tf.reduce_sum(tf.square(boundary_values - BC_values))
 
-        for boundary_samples, boundary_values, BC_function, dim in zip(np.split(self.domain.boundary_samples,
-                                                                                self.domain.boundary_sample_starts, axis = 0),
-                                                                       tf.split(v2_values,
-                                                                                self.domain.samples_per_boundary, axis = 0),
-                                                                       self.BCs_v2,
-                                                                       [0,0,1,1]):
+        for boundary_values, BC_values in zip(tf.split(v2_values[:self.domain.boundary_samples.shape[0]],
+                                                       self.domain.samples_per_boundary, axis = 0),
+                                              self.BC_values_v2):
 
-            BC_values      = BC_function(boundary_samples[:,dim])
             loss_boundary += tf.reduce_sum(tf.square(boundary_values - BC_values))
 
         loss_boundary /= 2*self.domain.boundary_samples.shape[0]
@@ -331,7 +349,7 @@ class PINN_object_stokesflow():
 
 
 
-    def __epoch_grads(self):
+    def __epoch_grad(self):
         """Compute the gradient in one epoch of the u values w.r.t. the sample points."""
         with tf.GradientTape() as tape:
             loss = self.__epoch_loss()
@@ -347,8 +365,9 @@ class PINN_object_stokesflow():
         ax_loss, ax_p, ax_v1, ax_v2 = axs.flat
         loss_lines                  = []
 
-        for loss_type in ['total loss (weighted)','incompressibility loss','interior (PDE) loss','boundary loss']:
-            loss_lines.append(ax_loss.plot([],[], label = loss_type)[0])
+        for loss_type, zorder in zip(['total loss (weighted)','incompressibility loss','interior (PDE) loss','boundary loss'],
+                                      [1,0,0,0]):
+            loss_lines.append(ax_loss.plot([],[], label = loss_type, zorder = zorder)[0])
         
         ax_loss.set_yscale('log')
         ax_loss.set_xlabel('epochs')
@@ -401,6 +420,9 @@ class PINN_object_stokesflow():
             ):
         """Train the neural network."""
 
+        if not hasattr(self, 'RHS_f_values'):
+            self.compute_f_and_BC_values()
+
         # Initiating plotting if desired
         if show_progress:
             if not hasattr(self, 'ax_u'):
@@ -413,7 +435,7 @@ class PINN_object_stokesflow():
 
             self.epoch += 1
 
-            grads = self.__epoch_grads()
+            grads = self.__epoch_grad()
             self.optimizer.apply_gradients(zip(grads,self.model.trainable_variables))
 
             if show_progress and (i+1) % plot_update_interval == 0:
@@ -432,8 +454,9 @@ class PINN_object_stokesflow():
         self.loss_lines[2].set_ydata(self.losses_interior)
         self.loss_lines[3].set_ydata(self.losses_boundaries)
 
-        loss_min = min(self.losses_incompr + self.losses_interior + self.losses_boundaries)
-        loss_max = max(self.losses_total)
+        all_losses = self.losses_incompr + self.losses_interior + self.losses_boundaries + self.losses_total
+        loss_min = min(all_losses)
+        loss_max = max(all_losses)
         self.ax_loss.set_xlim(0,self.epoch)
         self.ax_loss.set_ylim(1e-1*loss_min, 1e1*loss_max)
 
