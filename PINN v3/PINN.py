@@ -220,7 +220,7 @@ class PINN_object_stokesflow():
         self.loss_weights = loss_weights
         
 
-    def evaluate(self,inputs, training = False):
+    def evaluate(self,inputs, training = False, pressure_average_zero = True):
         """Evaluate the neural network."""
 
         u_NN = self.model(inputs, training = training)
@@ -232,6 +232,9 @@ class PINN_object_stokesflow():
             p    = u_NN[:,0]
             v1   = u_NN[:,1]
             v2   = u_NN[:,2]
+
+        if pressure_average_zero:
+            p -= tf.reduce_mean(p)
 
         return p,v1,v2
 
@@ -263,6 +266,8 @@ class PINN_object_stokesflow():
 
         self.BC_values_v1 = BC_values_v1
         self.BC_values_v2 = BC_values_v2
+
+        plt.show()
 
         
 
@@ -334,7 +339,7 @@ class PINN_object_stokesflow():
         loss_boundary /= 2*self.domain.boundary_samples.shape[0]
 
         # Weighted sum of losses
-        loss = self.loss_weights[0]*loss_incompr + self.loss_weights[1]*loss_PDE + self.loss_weights[2]*loss_boundary
+        loss  = self.loss_weights[0]*loss_incompr + self.loss_weights[1]*loss_PDE + self.loss_weights[2]*loss_boundary
 
         # Record losses
         self.losses_total.append(loss.numpy())
@@ -448,11 +453,13 @@ class PINN_object_stokesflow():
 
         for loss_line in self.loss_lines:
             loss_line.set_xdata(range(1,self.epoch+1))
-            
-        self.loss_lines[0].set_ydata(self.losses_total)
-        self.loss_lines[1].set_ydata(self.losses_incompr)
-        self.loss_lines[2].set_ydata(self.losses_interior)
-        self.loss_lines[3].set_ydata(self.losses_boundaries)
+
+        for i,loss_data in enumerate([self.losses_total,
+                                      self.losses_incompr,
+                                      self.losses_interior,
+                                      self.losses_boundaries]):
+
+            self.loss_lines[i].set_ydata(loss_data)
 
         all_losses = self.losses_incompr + self.losses_interior + self.losses_boundaries + self.losses_total
         loss_min = min(all_losses)
