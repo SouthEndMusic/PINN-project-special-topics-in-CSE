@@ -1,0 +1,3 @@
+final_loss,stem_length,stem_width,branch_length,branch_width,learning_rate
+0.53761554,0,1,1,1,0.001
+0.2638415,0,1,1,2,0.001
