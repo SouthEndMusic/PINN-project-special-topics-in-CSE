@@ -132,7 +132,18 @@ class training():
         dv2_dyy = tape.gradient(dv2_dy, samples_all)[:,1]
         laplace_v = tf.stack([dv1_dxx + dv1_dyy,
                               dv2_dxx + dv2_dyy], axis = 1)
-        PDE_LHS_values  = -p_gradient + laplace_v
+
+        add_advection = False
+
+        if add_advection:
+            advection = output_all.v1 * tf.stack([dv1_dx, dv2_dx], axis = 1) + \
+                        output_all.v2 * tf.stack([dv1_dy, dv2_dy], axis = 1)
+
+            PDE_LHS_values  = -p_gradient + laplace_v - advection
+
+        else:
+            PDE_LHS_values  = -p_gradient + laplace_v
+        
         loss_interior_1 = tf.reduce_mean(tf.square(PDE_LHS_values[:,0]))
         loss_interior_2 = tf.reduce_mean(tf.square(PDE_LHS_values[:,1]))
         loss           += self.loss_weights.interior_1 * loss_interior_1
