@@ -164,16 +164,26 @@ class vizualize_network():
         The distance between the nodes in the x direction in the plot
     spacing_y : float
         The distance between the nodes in the y direction in the plot
+    linewidth : float
+        With of the weight lines
+    nodesize : float
+        Size of the nodes
+    show_axis : bool
+        Whether the axes with numbers should be shown
     """
 
     def __init__(self,
                  figsize   = (5,5),
                  spacing_x = 1,
                  spacing_y = 1,
+                 linewidth = 1,
+                 nodesize  = 10,
                  show_axes = False):
 
         self.cmap_weights = cm.get_cmap('coolwarm')
-
+        self.lw           = linewidth
+        self.nodesize     = nodesize
+        
         self.fig_network, self.ax_network = plt.subplots(figsize = figsize)
         self.__init_plotting(spacing_x,
                              spacing_y,
@@ -269,13 +279,13 @@ class vizualize_network():
         # Plotting stem nodes
         stem_nodes   = [node_data for node_data in node_dict.keys() if node_data[0] in ['stem','input']]
         coords_nodes = np.array([node_dict[node_data] for node_data in stem_nodes])
-        self.ax_network.scatter(coords_nodes[:,0], coords_nodes[:,1], c = 'k', zorder = 1)
+        self.ax_network.scatter(coords_nodes[:,0], coords_nodes[:,1], c = 'k', zorder = 1, s = self.nodesize)
 
         # Plotting branch nodes
         for branch_name, branch_color in zip(branch_names, branch_colors):
             branch_nodes = [node_data for node_data in node_dict.keys() if node_data[0] == branch_name]
             coords_nodes = np.array([node_dict[node_data] for node_data in branch_nodes])
-            self.ax_network.scatter(coords_nodes[:,0], coords_nodes[:,1], c = branch_color, zorder = 1)
+            self.ax_network.scatter(coords_nodes[:,0], coords_nodes[:,1], c = branch_color, zorder = 1, s = self.nodesize)
 
         # Plotting connections
         weight_lines = dict()
@@ -283,7 +293,7 @@ class vizualize_network():
         for connection in connections:
 
             xy = np.array([node_dict[node_data] for node_data in connection]).T
-            weight_lines[connection], = self.ax_network.plot(xy[0],xy[1], zorder = 0, color = 'k')
+            weight_lines[connection], = self.ax_network.plot(xy[0],xy[1], zorder = 0, color = 'k', lw = self.lw)
 
         self.node_dict    = node_dict
         self.connections  = connections

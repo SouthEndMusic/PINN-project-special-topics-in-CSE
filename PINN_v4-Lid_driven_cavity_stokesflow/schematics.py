@@ -76,7 +76,59 @@ class schematics:
         plt.savefig('figures/Swish_activation.png')
         plt.show()
 
+    @staticmethod
+    def training_animation():
+
+        import cv2
+
+        network_folder  = 'figures/animation/network'
+        output_folder   = 'figures/animation/output'
+        combined_images = []
+
+        output_image_width = int(1000 * 500/800)
+
+        for i in range(500):
+
+            network_image = cv2.imread(f'{network_folder}/{10*i}.png')[:,140:-25]
+            output_image  = cv2.imread(f'{output_folder}/{10*i}.png')
+            output_image = cv2.resize(output_image, (output_image_width,500))
+
+            combined_image = np.concatenate([network_image, output_image], axis = 1)
+
+            combined_images.append(combined_image)
+            
+            print(f'loaded {i*10}')
+
+        print(network_image.shape)
+        print(output_image.shape)
+
+        play = True
+        while play:
+            for combined_image in combined_images:
+                cv2.imshow('combined', combined_image)
+
+                key = cv2.waitKey(25)
+
+                if key == ord('q'):
+                    play = False
+                    break
+
+        cv2.destroyAllWindows()
+
+        frame_shape = (combined_image.shape[1],
+                       combined_image.shape[0])
+
+        out = cv2.VideoWriter('figures/training.avi', cv2.VideoWriter_fourcc('M','J','P','G'), 40,
+                              frame_shape)
+
+        for combined_image in combined_images:
+            out.write(combined_image)
+
+        out.release()
+
+
+
 if __name__ == "__main__":
 
-    schematics.swish_activation()
+    schematics.training_animation()
 

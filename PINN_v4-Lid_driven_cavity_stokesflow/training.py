@@ -198,7 +198,8 @@ class training():
     def fit(self,
             n_epochs : int = 1000,
             plot_update_interval : int = 50,
-            show_progress : bool = True):
+            show_progress : bool = True,
+            save_figs : bool = False):
         """Train the neural network."""
 
         # Main training loop
@@ -210,9 +211,13 @@ class training():
 
             self.optimizer.apply_gradients(zip(grad,self.model.trainable_variables))
 
-            if (i+1) % plot_update_interval == 0:   
+            if i % plot_update_interval == 0:   
 
                 if self.show_training_plots:
                     self.update_training_plots()
                 if self.show_network_plot:
                     self.update_weights_plot()
+
+                if save_figs:
+                    self.fig_training.savefig(f'figures/animation/output/{i}.png')
+                    self.fig_network.savefig(f'figures/animation/network/{i}.png')
